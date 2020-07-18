@@ -1,0 +1,925 @@
+      rem 3D path tracing program version IV. dev start date: 12/05/2020
+
+      rem to anybody reading this: just a disclaimer. the following code was just a lockdown project for the sake of it and the code is in an unoptimised state and likely riddled with flaws. any improvements / comments / criticisms are welcome
+      rem the program executes on a singe thread due to the naturre of BBC BASIC and a render may take hours to complete even on the lowest quality settings.
+
+
+      rem reserve extra memory
+
+      himem=487643392
+
+      rem setup screen
+
+
+      RES%=2  :rem set resolution multiplier , 1 = 192x108
+
+      dlfidelity%=1 :rem set diffuse lighting fidelity (i.e sampling rate, 1 = 1 sample per pixel however since the program includes 2x SSAA its actually 4)
+
+
+      SX%=192*RES%
+      SY%=108*RES%
+      vdu 23,22,SX%;SY%;8,16,16,128
+      vdu 20
+      sys "ShowWindow", @hwnd%, 1
+
+      rem reset cursor / set foreground and background colours
+
+      vdu 26
+      gcol 7
+      colour 7
+      gcol 0,128
+      colour 128
+      clg
+      cls
+      off
+
+
+      rem initialise triangle array in form: triangle number,point (1/2/3),coordinate (1=x,2=y,3=z)
+
+      dim triangle(10000,3,3)
+
+
+      rem initialise framebuffer array (pixel X,pixel Y, R/G/B)
+
+      dim displayout(1920,1080,3)
+
+      rem initialise triangle material properties array / intersect array
+
+      dim material(10000,3)
+
+      dim paramT(10000),hitmiss$(10000),isectX(10000),isectY(10000),isectZ(10000)
+
+
+
+      procCREATESCENE
+
+      TI=time
+
+
+      FRNUM%=1000 :rem start at frame number 1000
+
+
+      for LightAngle=0 to 357 step 3 :rem create loop to animate lightsource in a 360 deg circle above geometry
+  
+        LVRad=rad(LightAngle) :rem convert angle to radians
+  
+  
+  
+        rem compute diffuse light coordinates based on angle
+  
+        DlightX(1)=sin(LVRad+(2/3)*pi)*60+100
+        DlightY(1)=150
+        DlightZ(1)=cos(LVRad+(2/3)*pi)*60+140
+  
+  
+        DlightX(2)=sin(LVRad+(2.05/3)*pi)*60+100
+        DlightY(2)=150
+        DlightZ(2)=cos(LVRad+(2.05/3)*pi)*60+140
+  
+  
+        DlightX(3)=sin(LVRad+(2.1/3)*pi)*60+100
+        DlightY(3)=150
+        DlightZ(3)=cos(LVRad+(2.1/3)*pi)*60+140
+  
+  
+  
+  
+        procTRACE
+        procRENDER
+  
+      next LightAngle
+
+      end
+
+
+      defprocCREATESCENE
+
+
+      rem create scene geometry - hardcoded in form triangle(which triangle array index, which point,x/y/z) , material(which triangle array index,red/green/blue). At some point I intend to change this so scene geometry and lights are loaded in from a file.
+      rem floor and walls ----------------------------------------------------------------------------
+
+      triangle(1,1,1)=-100
+      triangle(1,1,2)=1
+      triangle(1,1,3)=1
+
+      triangle(1,2,1)=-100
+      triangle(1,2,2)=1
+      triangle(1,2,3)=292
+
+      triangle(1,3,1)=292
+      triangle(1,3,2)=1
+      triangle(1,3,3)=292
+
+      material(1,1)=0.8
+      material(1,2)=0.8
+      material(1,3)=0.8
+
+
+      triangle(2,1,1)=-100
+      triangle(2,1,2)=1
+      triangle(2,1,3)=1
+
+      triangle(2,2,1)=292
+      triangle(2,2,2)=1
+      triangle(2,2,3)=1
+
+      triangle(2,3,1)=292
+      triangle(2,3,2)=1
+      triangle(2,3,3)=292
+
+      material(2,1)=0.8
+      material(2,2)=0.8
+      material(2,3)=0.8
+
+
+
+
+
+      triangle(3,1,1)=-100
+      triangle(3,1,2)=1
+      triangle(3,1,3)=292
+
+      triangle(3,2,1)=292
+      triangle(3,2,2)=1
+      triangle(3,2,3)=292
+
+      triangle(3,3,1)=-100
+      triangle(3,3,2)=292
+      triangle(3,3,3)=292
+
+      material(3,1)=0.8
+      material(3,2)=0.8
+      material(3,3)=0.8
+
+
+      triangle(4,1,1)=-100
+      triangle(4,1,2)=292
+      triangle(4,1,3)=292
+
+      triangle(4,2,1)=292
+      triangle(4,2,2)=1
+      triangle(4,2,3)=292
+
+      triangle(4,3,1)=292
+      triangle(4,3,2)=292
+      triangle(4,3,3)=292
+
+      material(4,1)=0.8
+      material(4,2)=0.8
+      material(4,3)=0.8
+
+
+
+
+
+      triangle(5,1,1)=-100
+      triangle(5,1,2)=1
+      triangle(5,1,3)=1
+
+      triangle(5,2,1)=-100
+      triangle(5,2,2)=1
+      triangle(5,2,3)=292
+
+      triangle(5,3,1)=-100
+      triangle(5,3,2)=292
+      triangle(5,3,3)=292
+
+      material(5,1)=0.8
+      material(5,2)=0.8
+      material(5,3)=0.8
+
+
+      triangle(6,1,1)=292
+      triangle(6,1,2)=1
+      triangle(6,1,3)=1
+
+      triangle(6,2,1)=292
+      triangle(6,2,2)=1
+      triangle(6,2,3)=292
+
+      triangle(6,3,1)=292
+      triangle(6,3,2)=292
+      triangle(6,3,3)=292
+
+      material(6,1)=0.8
+      material(6,2)=0.8
+      material(6,3)=0.8
+
+
+
+
+
+      rem scene objects -------------------------------------------------------------------
+
+
+
+
+      triangle(7,1,1)=60
+      triangle(7,1,2)=-1
+      triangle(7,1,3)=140
+
+      triangle(7,2,1)=100
+      triangle(7,2,2)=-1
+      triangle(7,2,3)=180
+
+      triangle(7,3,1)=100
+      triangle(7,3,2)=100
+      triangle(7,3,3)=140
+
+      material(7,1)=1
+      material(7,2)=1
+      material(7,3)=1
+
+
+
+      triangle(8,1,1)=100
+      triangle(8,1,2)=-1
+      triangle(8,1,3)=180
+
+      triangle(8,2,1)=140
+      triangle(8,2,2)=-1
+      triangle(8,2,3)=140
+
+      triangle(8,3,1)=100
+      triangle(8,3,2)=100
+      triangle(8,3,3)=140
+
+      material(8,1)=1
+      material(8,2)=1
+      material(8,3)=1
+
+
+
+      triangle(9,1,1)=60
+      triangle(9,1,2)=-1
+      triangle(9,1,3)=140
+
+      triangle(9,2,1)=100
+      triangle(9,2,2)=-1
+      triangle(9,2,3)=100
+
+      triangle(9,3,1)=100
+      triangle(9,3,2)=100
+      triangle(9,3,3)=140
+
+      material(9,1)=1
+      material(9,2)=1
+      material(9,3)=1
+
+
+
+      triangle(10,1,1)=100
+      triangle(10,1,2)=-1
+      triangle(10,1,3)=100
+
+      triangle(10,2,1)=140
+      triangle(10,2,2)=-1
+      triangle(10,2,3)=140
+
+      triangle(10,3,1)=100
+      triangle(10,3,2)=100
+      triangle(10,3,3)=140
+
+      material(10,1)=1
+      material(10,2)=1
+      material(10,3)=1
+
+
+
+
+
+
+      Atop%=10 :rem set top of array - maximum number of triangles used
+
+
+      dim DlightX(10),DlightY(10),DlightZ(10),DlightSIZE(10),DlightR(10),DlightG(10),DlightB(10),DlightBRIGHT(10),DlightON%(10) :rem initialise diffuse light properties array
+
+
+
+
+      rem set light properties (coordiantes / size / RGB colour / brightness / is light on)
+
+      DlightX(1)=0
+      DlightY(1)=200
+      DlightZ(1)=152
+      DlightSIZE(1)=15
+
+      DlightR(1)=1
+      DlightG(1)=0.2
+      DlightB(1)=0.2
+      DlightBRIGHT(1)=300*(100/dlfidelity%)
+      DlightON%(1)=1
+
+
+
+
+
+      DlightX(2)=192
+      DlightY(2)=200
+      DlightZ(2)=152
+      DlightSIZE(2)=10
+
+      DlightR(2)=0.2
+      DlightG(2)=0.2
+      DlightB(2)=1
+      DlightBRIGHT(2)=300*(100/dlfidelity%)
+      DlightON%(2)=1
+
+
+
+
+
+      DlightX(3)=96
+      DlightY(3)=100
+      DlightZ(3)=20
+      DlightSIZE(3)=10
+
+      DlightR(3)=0.2
+      DlightG(3)=1
+      DlightB(3)=0.2
+      DlightBRIGHT(3)=300*(100/dlfidelity%)
+      DlightON%(3)=1
+
+
+
+
+
+
+
+      rem set ambient light colour / brightness
+
+
+      ambientR=1
+      ambientG=1
+      ambientB=1
+
+      ambientBRIGHT=40
+
+
+      endproc
+
+
+
+
+
+
+      defprocTRACE
+
+      for SAMPLENUM%=1 to 4 :rem 4 samples per pixel in order to get a less noisy / antialiased image by supersampling at twice the resolution
+  
+        rem set pixel ray modifier based on sample number. this splits each pixel into 4 quadrants that are averaged at the end to find pixel colour
+  
+        if SAMPLENUM%=1 then pixMODX=0.75:pixMODY=0.75
+        if SAMPLENUM%=2 then pixMODX=0.25:pixMODY=0.75
+        if SAMPLENUM%=3 then pixMODX=0.75:pixMODY=0.25
+        if SAMPLENUM%=4 then pixMODX=0.25:pixMODY=0.25
+  
+  
+        for DOY%=1 to 108*RES% :rem loop pixel y coordinates
+          for DOX%=1 to 192*RES% :rem loop pixel x coordinates
+            for RTRACE%=1 to Atop% rem loop to test ray against each triangle where RTRACE% is the triangle's array index
+        
+              rem transfer triangle data from array into new variables for ease of simple lines (may change this at some point to optimise): in the form of points A, B and C each with an x,y,z coordinate
+        
+              TAX=triangle(RTRACE%,1,1)
+              TAY=triangle(RTRACE%,1,2)
+              TAZ=triangle(RTRACE%,1,3)
+              TBX=triangle(RTRACE%,2,1)
+              TBY=triangle(RTRACE%,2,2)
+              TBZ=triangle(RTRACE%,2,3)
+              TCX=triangle(RTRACE%,3,1)
+              TCY=triangle(RTRACE%,3,2)
+              TCZ=triangle(RTRACE%,3,3)
+        
+        
+              rem create vectors from triangle A coordiantes to B and C, since these vectors are in the plane of the triangle they will be used to define the plane
+        
+              ABX=TBX-TAX
+              ABY=TBY-TAY
+              ABZ=TBZ-TAZ
+              ACX=TCX-TAX
+              ACY=TCY-TAY
+              ACZ=TCZ-TAZ
+        
+        
+              rem create cartesian plane coefficients by doing cross product of vectors AB and AC. Plane defined in form AX + BY + CZ = D
+        
+              pcoeffX=ABY*ACZ-ABZ*ACY
+              pcoeffY=-(ABX*ACZ-ABZ*ACX)
+              pcoeffZ=ABX*ACY-ABY*ACX
+        
+        
+              rem insert coordinate A into cartesian equation of plane to get D for plane equation
+        
+              pconverge=pcoeffX*TAX+pcoeffY*TAY+pcoeffZ*TAZ
+        
+        
+        
+              rem set camera coordinates (raycasting ray origin) for approx 70 deg viewing angle
+        
+              rayoriginX=96
+              rayoriginY=54
+              rayoriginZ=-137 :rem you can think of the camera being physically coming out of the screen towards roughtly where your face is. the plane of the screen haz a Z coordinate of 0
+        
+        
+              rem create raycasting destination points so that a line can be drawn from the camera to the correct quadrant of current pixel (defined by DOX%,DOY% and quadrant defined by pixMODX/pixMODY). we devide by RES% so coordinates dont change with resolution
+        
+              raydestinationX=DOX%/RES%-pixMODX/RES%
+              raydestinationY=DOY%/RES%-pixMODY/RES%
+              raydestinationZ=0 :rem ray destination Z coordinate set to 0 (touching the screen)
+        
+        
+              rem create ray origin --> ray destination vectors
+        
+              RORDX=raydestinationX-rayoriginX
+              RORDY=raydestinationY-rayoriginY
+              RORDZ=raydestinationZ-rayoriginZ
+        
+        
+              rem dot product to check to see if the ray vector and the normal vector of the current triangle being checked for ray - triangle intersection are at 90 degrees as in this case ray and plane are parallel and no intersection will occurr
+        
+              if (pcoeffX*RORDX+pcoeffY*RORDY+pcoeffZ*RORDZ)<>0 then
+          
+                rem the next section inside the previous IF statement will be executed if the ray is not parallel to the plane and will actually intersect
+          
+                rem solve equation to find the parameter T (multiple of ray vector) required to intersect the plane the curretc triangle is on
+          
+                T=(pconverge-pcoeffX*rayoriginX-pcoeffY*rayoriginY-pcoeffZ*rayoriginZ)/(pcoeffX*RORDX+pcoeffY*RORDY+pcoeffZ*RORDZ)
+          
+          
+                rem substitute solved parameter back into the equation for ray vector to find x,y,z intersection point of ray and plane
+          
+                IX=rayoriginX+(RORDX*T)
+                IY=rayoriginY+(RORDY*T)
+                IZ=rayoriginZ+(RORDZ*T)
+          
+          
+                rem create vectors between triangle points B and C and from the plane intersection point P to each point on triangle A,B and C
+          
+                BCX=TCX-TBX
+                BCY=TCY-TBY
+                BCZ=TCZ-TBZ
+                PAX=IX-TAX
+                PAY=IY-TAY
+                PAZ=IZ-TAZ
+                PBX=IX-TBX
+                PBY=IY-TBY
+                PBZ=IZ-TBZ
+                PCX=IX-TCX
+                PCY=IY-TCY
+                PCZ=IZ-TCZ
+          
+          
+                rem this next part of the program is likely the slowest / least optimised due to all the square roots
+          
+                rem find magnitude of each of the vectors (lengths of all triangle sides and lengths of lines from point P to each triangle point A,B and C, these last 3 lines split the large triangle into 3 sub triangles)
+          
+                magA=sqr(BCX^2+BCY^2+BCZ^2)
+                magB=sqr(ACX^2+ACY^2+ACZ^2)
+                magC=sqr(ABX^2+ABY^2+ABZ^2)
+                magD=sqr(PAX^2+PAY^2+PAZ^2)
+                magE=sqr(PBX^2+PBY^2+PBZ^2)
+                magF=sqr(PCX^2+PCY^2+PCZ^2)
+          
+          
+                rem the next section uses the previous vector magnitudes calculated to determine if the plane intersection point lies within or outside the triangle. If it lies inside it counts as a hit and the intersection point is stored
+                rem for the next section else it is a miss and the program loops to test the next triangle
+          
+                rem the value of half the perimeter is calculated so the area of the whole triangles + sub triangles made by drawing lines from the corners of triangle ABC to intersection point P can be calculated using Heron's formula
+                rem note that the letters A,B,C in the following section are now naming the sides rather than the points. the normal convention of having point A opposite side A is used
+          
+          
+          
+                rem compute for whole triangle: ABC ----------------------
+          
+                HPE1=(magA+magB+magC)/2
+          
+                if (HPE1*(HPE1-magA)*(HPE1-magB)*(HPE1-magC))>=0 then
+                  AREAT=sqr(HPE1*(HPE1-magA)*(HPE1-magB)*(HPE1-magC))
+                else
+                  AREAT=0
+                endif
+          
+          
+                rem compute for sub triangle: CDE ----------------------
+          
+                HPEcde=(magC+magD+magE)/2
+          
+                if (HPEcde*(HPEcde-magC)*(HPEcde-magD)*(HPEcde-magE))>=0 then
+                  AREAcde=sqr(HPEcde*(HPEcde-magC)*(HPEcde-magD)*(HPEcde-magE))
+                else
+                  AREAcde=0
+                endif
+          
+          
+                rem compute for sub triangle: BDF ---------------------
+          
+                HPEbdf=(magB+magD+magF)/2
+          
+                if (HPEbdf*(HPEbdf-magB)*(HPEbdf-magD)*(HPEbdf-magF))>=0 then
+                  AREAbdf=sqr(HPEbdf*(HPEbdf-magB)*(HPEbdf-magD)*(HPEbdf-magF))
+                else
+                  AREAbdf=0
+                endif
+          
+          
+                rem compute for sub triangle: AEF ---------------------
+          
+                HPEaef=(magA+magE+magF)/2
+          
+                if (HPEaef*(HPEaef-magA)*(HPEaef-magE)*(HPEaef-magF))>=0 then
+                  AREAaef=sqr(HPEaef*(HPEaef-magA)*(HPEaef-magE)*(HPEaef-magF))
+                else
+                  AREAaef=0
+                endif
+          
+          
+                rem add up the areas of the sub triangles
+          
+                AREAsubtot=AREAcde+AREAbdf+AREAaef
+          
+          
+                rem compare the value of the sum of the area of the subtriangles to the area of the whole triangle ABC. if the point of intersection lies within the triangle the sum total (compensating for internal rounding errors) of the
+                rem areas of the subtriangles is equal to the area of ABC, and if the point lies outside the triangle then the sum total areas of the subtriangles is greater than the triangle ABC
+          
+                if (AREAsubtot/AREAT)<1.00001 then hitmiss$(RTRACE%)="hit":paramT(RTRACE%)=T:isectX(RTRACE%)=IX:isectY(RTRACE%)=IY:isectZ(RTRACE%)=IZ else hitmiss$(RTRACE%)="miss" :rem if hit then store intersection data and triangle array index else label index as miss
+              endif
+        
+              rem : close loop - goto next triangle
+        
+            next RTRACE%
+      
+      
+            rem after all triangles have been tested for intersection with the ray we must select the closest one to the camera to be used to determine colour of current pixel (further triangles will be hidden by the closest one
+      
+      
+            rem define variable for array index as an illegal value
+      
+            arrayresult%=-1
+      
+      
+            rem scan through each triangle in array and check to see if it is labeled as hit by current ray or missed. if any triangle is found to be hit then the arrayresult% variable is set to the index of the hit triangle
+      
+            for findhit%=1 to Atop%
+              if hitmiss$(findhit%)="hit" then arrayresult%=findhit%
+            next
+      
+      
+            rem check to see if any trinagles came up as hit. if none were hit by this ray the pixel will be shaded black. (currently no skybox)
+            rem if a triangle was hit i.e arrayresult% is unequal to -1 then take this as the closest triangle. then rescan all triangles and if a closer one is found, set the index of this triangle as the new closest one.
+      
+            if arrayresult%<>-1 then
+              closest%=arrayresult%
+              for findclosest%=1 to Atop%
+                if hitmiss$(findclosest%)="hit" and paramT(findclosest%)<paramT(closest%) then closest%=findclosest%
+              next
+        
+        
+              rem now we know which triangle that was hit is the closest we can compute the equation of its normal vector (plane coefficients) in the same way as we did the first time round when testing ray triangle intersection
+        
+              TAX=triangle(closest%,1,1)
+              TAY=triangle(closest%,1,2)
+              TAZ=triangle(closest%,1,3)
+              TBX=triangle(closest%,2,1)
+              TBY=triangle(closest%,2,2)
+              TBZ=triangle(closest%,2,3)
+              TCX=triangle(closest%,3,1)
+              TCY=triangle(closest%,3,2)
+              TCZ=triangle(closest%,3,3)
+        
+              ABX=TBX-TAX
+              ABY=TBY-TAY
+              ABZ=TBZ-TAZ
+              ACX=TCX-TAX
+              ACY=TCY-TAY
+              ACZ=TCZ-TAZ
+        
+              nvectX=ABY*ACZ-ABZ*ACY
+              nvectY=-(ABX*ACZ-ABZ*ACX)
+              nvectZ=ABX*ACY-ABY*ACX
+        
+              pconV2=nvectX*TAX+nvectY*TAY+nvectZ*TAZ
+        
+        
+        
+        
+              rem trace rays to lights --------------------------------------------------------------------------------------
+        
+              for DLcheck%=1 to 10 :rem loop through all lights
+                for dlfid%=1 to dlfidelity% :rem this loop traces rays to the lightsource. the higher dlfidelity% the more rays will be traced to get less noisy result (the more samples the more convergeance to ground truth - perfect image quality). comp. cost grows
+            
+            
+                  rem check to see if light is switched on. If light is off loop to next one
+            
+                  if DlightON%(DLcheck%)=1 then
+              
+              
+                    rem trace ray from intersection point of camera ray with closest triangle to a random point inside the volume of current area light
+              
+                    procTRACETOLIGHT(isectX(closest%),isectY(closest%),isectZ(closest%))
+              
+              
+                    rem in order to prevent transparency of triangles, i.e. seeing light on a triangle when the light is on the opposite side (even though the tracetolight routine checks for geometry in the way of light in order to cast shadows the current triangle
+                    rem has zero thickness and hence will not self shadow) we check to see if the camera is on the same side or opposite side of the plane as the light and only illuminate if its on the same. we do this by substituting the coordinates of camera / light
+                    rem into the equation of the plane. 1 side will give a positive result and the other side will give a negative result. being in the plane gives 0. we then compare the sign of the values to determine if points are same or opposite side.
+              
+                    OBSsign=(nvectX*96+nvectY*54+nvectZ*-137)-pconV2
+                    LIGHTsign=(nvectX*rayoriginX+nvectY*rayoriginY+nvectZ*rayoriginZ)-pconV2
+              
+                    if OBSsign>0 and LIGHTsign<0 then surfaceLIT$="false"
+                    if LIGHTsign>0 and OBSsign<0 then surfaceLIT$="false"
+              
+              
+                    rem the angle of a light relative to a surface affects the reflected intensity: lamberts cosine law (iirc) the surface is most brightly illuminated by a perpendicular light and illumination tends to 0 as the light reaches the horizon.
+              
+                    rem calculate angle between normal vector and ray vector: cos(theta) = modulus (normal dot ray / |normal| * |ray|)
+              
+                    CStheta=abs((nvectX*RORDX+nvectY*RORDY+nvectZ*RORDZ)/(sqr(nvectX^2+nvectY^2+nvectZ^2)*sqr(RORDX^2+RORDY^2+RORDZ^2)))
+              
+              
+                    theta=acs(CStheta) :rem arc sine to find angle
+                    thetadeg=deg(theta) :rem convert to degrees
+                    phiang=90-thetadeg :rem need angle between ray and plane not ray and normal so subtract from 90 degrees
+                    brightmod=(phiang/90) :rem make a brightness modifier based on fraction of the maximum angle (90 deg)
+              
+              
+                    rem compute the RGB multiplier of the pixel based on light RGB, light distance (inverse rather than inverse square in this case for a better dynamic range) and brightness modifier
+              
+                    DLR=DlightR(DLcheck%)/(sqr(RORDX^2+RORDY^2+RORDZ^2))*brightmod
+                    DLG=DlightG(DLcheck%)/(sqr(RORDX^2+RORDY^2+RORDZ^2))*brightmod
+                    DLB=DlightB(DLcheck%)/(sqr(RORDX^2+RORDY^2+RORDZ^2))*brightmod
+              
+              
+                    rem if no geometry was detected between closest triangle intersection point and light source then it is lit and the pixel colour and brightness is calculated and stored in the pixel location of framebuffer array indexed by its coordinates
+              
+                    if surfaceLIT$="true" then
+                      displayout(DOX%,DOY%,1)=displayout(DOX%,DOY%,1)+material(closest%,1)*DLR*DlightBRIGHT(DLcheck%)
+                      displayout(DOX%,DOY%,2)=displayout(DOX%,DOY%,2)+material(closest%,2)*DLG*DlightBRIGHT(DLcheck%)
+                      displayout(DOX%,DOY%,3)=displayout(DOX%,DOY%,3)+material(closest%,3)*DLB*DlightBRIGHT(DLcheck%)
+                    endif
+                  else
+              
+                  endif
+            
+                next dlfid%
+              next DLcheck%
+        
+        
+        
+              rem after iteratively tracing to lihgts we now add the ambient light contribution to the framebuffer
+        
+              displayout(DOX%,DOY%,1)=displayout(DOX%,DOY%,1)+material(closest%,1)*ambientR*ambientBRIGHT
+              displayout(DOX%,DOY%,2)=displayout(DOX%,DOY%,2)+material(closest%,2)*ambientG*ambientBRIGHT
+              displayout(DOX%,DOY%,3)=displayout(DOX%,DOY%,3)+material(closest%,3)*ambientB*ambientBRIGHT
+        
+            else
+        
+        
+              rem if no triangle was hit by the camera ray then the pixel colour is black
+        
+              displayout(DOX%,DOY%,1)=0
+              displayout(DOX%,DOY%,2)=0
+              displayout(DOX%,DOY%,3)=0
+        
+            endif
+      
+      
+            rem reset values stored in array for testing intersection ready for the next pixel
+      
+            for reset%=1 to Atop%
+              paramT(reset%)=0
+              hitmiss$(reset%)=""
+            next
+      
+      
+            rem next pixel (in x direction):
+      
+          next DOX%
+    
+          rem display info so progress can be seen for long renders
+    
+          printtab(2,1);"raytracing: Pass ";SAMPLENUM%;"/4 ... ";int((DOY%/(108*RES%))*1000)/10;"%      "
+          printtab(2,2);"Time elapsed: ";int(((time-TI)/(100*60))*100)/100;" minutes...      "
+          printtab(2,3);"Frame: ";FRNUM%;"  "
+    
+    
+          rem after every pixel on a row has been shaded move onto the next row:
+    
+        next DOY%
+  
+  
+        rem once the whole image has been shaded, start again on the next sample with rays going through a different pixel quadrant
+  
+      next SAMPLENUM%
+
+      endproc
+
+
+
+
+
+      rem procedure for tracing rays from closest triangle intersection to light source - arguments are intersection point coordinates
+
+      defprocTRACETOLIGHT(ISOX,ISOY,ISOZ)
+
+
+      rem make the surface being illuminated the default
+
+      surfaceLIT$="true"
+
+
+      rem scan for all scene triangles to determine of any of them occlude the intersection point
+
+      for RTRACE%=1 to Atop%
+  
+  
+        rem same as in the camera ray section. coordinates are transfered, the plane is defined and intersection of the triangle is tested in almost the exact same way as before so I won't detail it again other than a couple of small details
+  
+        TAX=triangle(RTRACE%,1,1)
+        TAY=triangle(RTRACE%,1,2)
+        TAZ=triangle(RTRACE%,1,3)
+        TBX=triangle(RTRACE%,2,1)
+        TBY=triangle(RTRACE%,2,2)
+        TBZ=triangle(RTRACE%,2,3)
+        TCX=triangle(RTRACE%,3,1)
+        TCY=triangle(RTRACE%,3,2)
+        TCZ=triangle(RTRACE%,3,3)
+  
+        ABX=TBX-TAX
+        ABY=TBY-TAY
+        ABZ=TBZ-TAZ
+        ACX=TCX-TAX
+        ACY=TCY-TAY
+        ACZ=TCZ-TAZ
+  
+        pcoeffX=ABY*ACZ-ABZ*ACY
+        pcoeffY=-(ABX*ACZ-ABZ*ACX)
+        pcoeffZ=ABX*ACY-ABY*ACX
+  
+        pconverge=pcoeffX*TAX+pcoeffY*TAY+pcoeffZ*TAZ
+  
+  
+        rem the difference from before: the rayorigin is the coordinates of the previous intersection of the closest triangle and the destination is a random point within the 3D volume of the area light being traced to
+  
+        rayoriginX=ISOX
+        rayoriginY=ISOY
+        rayoriginZ=ISOZ
+  
+        raydestinationX=DlightX(DLcheck%)+(rnd(DlightSIZE(DLcheck%)*1000)-(DlightSIZE(DLcheck%)*500))/1000
+        raydestinationY=DlightY(DLcheck%)+(rnd(DlightSIZE(DLcheck%)*1000)-(DlightSIZE(DLcheck%)*500))/1000
+        raydestinationZ=DlightZ(DLcheck%)+(rnd(DlightSIZE(DLcheck%)*1000)-(DlightSIZE(DLcheck%)*500))/1000
+  
+      endif
+
+      RORDX=raydestinationX-rayoriginX
+      RORDY=raydestinationY-rayoriginY
+      RORDZ=raydestinationZ-rayoriginZ
+
+
+      rem the ray origin is moved by a tiny fraction in the direction of the light source along the vector to prevent rounding errors causing self occlusion
+
+      rayoriginX=ISOX+0.00001*RORDX
+      rayoriginY=ISOY+0.00001*RORDY
+      rayoriginZ=ISOZ+0.00001*RORDZ
+
+      RORDX=raydestinationX-rayoriginX
+      RORDY=raydestinationY-rayoriginY
+      RORDZ=raydestinationZ-rayoriginZ
+
+
+
+      if (pcoeffX*RORDX+pcoeffY*RORDY+pcoeffZ*RORDZ)<>0 then
+  
+        T=(pconverge-pcoeffX*rayoriginX-pcoeffY*rayoriginY-pcoeffZ*rayoriginZ)/(pcoeffX*RORDX+pcoeffY*RORDY+pcoeffZ*RORDZ)
+  
+        IX=rayoriginX+(RORDX*T)
+        IY=rayoriginY+(RORDY*T)
+        IZ=rayoriginZ+(RORDZ*T)
+  
+        BCX=TCX-TBX
+        BCY=TCY-TBY
+        BCZ=TCZ-TBZ
+        PAX=IX-TAX
+        PAY=IY-TAY
+        PAZ=IZ-TAZ
+        PBX=IX-TBX
+        PBY=IY-TBY
+        PBZ=IZ-TBZ
+        PCX=IX-TCX
+        PCY=IY-TCY
+        PCZ=IZ-TCZ
+  
+        magA=sqr(BCX^2+BCY^2+BCZ^2)
+        magB=sqr(ACX^2+ACY^2+ACZ^2)
+        magC=sqr(ABX^2+ABY^2+ABZ^2)
+        magD=sqr(PAX^2+PAY^2+PAZ^2)
+        magE=sqr(PBX^2+PBY^2+PBZ^2)
+        magF=sqr(PCX^2+PCY^2+PCZ^2)
+  
+        HPE1=(magA+magB+magC)/2
+        if (HPE1*(HPE1-magA)*(HPE1-magB)*(HPE1-magC))>=0 then
+          AREAT=sqr(HPE1*(HPE1-magA)*(HPE1-magB)*(HPE1-magC))
+        else
+          AREAT=0
+        endif
+  
+        HPEcde=(magC+magD+magE)/2
+        if (HPEcde*(HPEcde-magC)*(HPEcde-magD)*(HPEcde-magE))>=0 then
+          AREAcde=sqr(HPEcde*(HPEcde-magC)*(HPEcde-magD)*(HPEcde-magE))
+        else
+          AREAcde=0
+        endif
+  
+        HPEbdf=(magB+magD+magF)/2
+        if (HPEbdf*(HPEbdf-magB)*(HPEbdf-magD)*(HPEbdf-magF))>=0 then
+          AREAbdf=sqr(HPEbdf*(HPEbdf-magB)*(HPEbdf-magD)*(HPEbdf-magF))
+        else
+          AREAbdf=0
+        endif
+  
+        HPEaef=(magA+magE+magF)/2
+        if (HPEaef*(HPEaef-magA)*(HPEaef-magE)*(HPEaef-magF))>=0 then
+          AREAaef=sqr(HPEaef*(HPEaef-magA)*(HPEaef-magE)*(HPEaef-magF))
+        else
+          AREAaef=0
+        endif
+  
+        AREAsubtot=AREAcde+AREAbdf+AREAaef
+  
+  
+        rem if the ray intersects any triangle that is between the origin and destination then the origin - intersection point with closest triangle is not illuminated
+  
+        if (AREAsubtot/AREAT)<1.0000001 and T>0 and T<1 then surfaceLIT$="false"
+  
+      endif
+
+      next RTRACE%
+
+      endproc
+
+
+
+
+      rem procedure for drawing the image and saving it as a windows bitmap (.BMP) file
+
+      defprocRENDER
+
+      cls
+
+
+      rem use graphics colour 8 (grey by default)
+
+      gcol 8
+
+      rem loop in order to index the framebuffer
+
+      for dispy%=0 to 108*RES%
+
+      for dispx%=0 to 192*RES%
+  
+  
+        rem divide every pixel brightness value by 4 since its the sum of 4 supersamples to achieve the original brightness
+  
+        displayout(dispx%,dispy%,1)=displayout(dispx%,dispy%,1)/4
+        displayout(dispx%,dispy%,2)=displayout(dispx%,dispy%,2)/4
+        displayout(dispx%,dispy%,3)=displayout(dispx%,dispy%,3)/4
+  
+  
+        rem make sure the brightness of each channel cannot exceed the maximum of 255 (for example 256 is the same as 0 and is the darkest as in binary the bit has shifted from 11111111 to 100000000 but its an 8 bit value and truncates to 00000000)
+  
+        if displayout(dispx%,dispy%,1)>255 then displayout(dispx%,dispy%,1)=255
+        if displayout(dispx%,dispy%,2)>255 then displayout(dispx%,dispy%,2)=255
+        if displayout(dispx%,dispy%,3)>255 then displayout(dispx%,dispy%,3)=255
+  
+  
+        rem use vdu command to set the RGB value of the colour the graphics cursor will draw to the value in the framebuffer
+  
+        vdu 19,8,16,int(displayout(dispx%,dispy%,1)),int(displayout(dispx%,dispy%,2)),int(displayout(dispx%,dispy%,3))
+  
+  
+        rem draw 1 1x1 pixel rectangle at the pixel coordinates (BASIC has a coordinate system where each pixel is 2 units wide by default)
+  
+        rectangle fill dispx%*2,dispy%*2,2,2
+  
+  
+        rem reset the framebuffer for the next frame of animation
+  
+        displayout(dispx%,dispy%,1)=0
+        displayout(dispx%,dispy%,2)=0
+        displayout(dispx%,dispy%,3)=0
+  
+      next
+
+      next
+
+
+      rem use the OS command line interpreter to inject a *screensave command which saves the screen space as a .BMP file. the file will be saved as Render_XXXX where XXXX starts at 1000
+
+      oscli "screensave "+"Render_"+str$(FRNUM%)
+
+      FRNUM%=FRNUM%+1 :rem increment the framenumber so the next frame does not overwrite the previous by having the same filename
+
+      endproc
+
+
+
