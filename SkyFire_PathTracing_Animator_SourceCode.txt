@@ -1,7 +1,7 @@
       rem 3D path tracing program version IV. dev start date: 12/05/2020
 
       rem to anybody reading this: just a disclaimer. the following code was just a lockdown project for the sake of it and the code is in an unoptimised state and likely riddled with flaws. any improvements / comments / criticisms are welcome
-      rem the program executes on a singe thread due to the naturre of BBC BASIC and a render may take hours to complete even on the lowest quality settings.
+      rem the program executes on a singe thread due to the nature of BBC BASIC and a render may take hours to complete even on the lowest quality settings.
 
 
       rem reserve extra memory
@@ -565,7 +565,7 @@
             next
       
       
-            rem check to see if any trinagles came up as hit. if none were hit by this ray the pixel will be shaded black. (currently no skybox)
+            rem check to see if any triangles came up as hit. if none were hit by this ray the pixel will be shaded black. (currently no skybox)
             rem if a triangle was hit i.e arrayresult% is unequal to -1 then take this as the closest triangle. then rescan all triangles and if a closer one is found, set the index of this triangle as the new closest one.
       
             if arrayresult%<>-1 then
@@ -666,7 +666,7 @@
         
         
         
-              rem after iteratively tracing to lihgts we now add the ambient light contribution to the framebuffer
+              rem after iteratively tracing to lights we now add the ambient light contribution to the framebuffer
         
               displayout(DOX%,DOY%,1)=displayout(DOX%,DOY%,1)+material(closest%,1)*ambientR*ambientBRIGHT
               displayout(DOX%,DOY%,2)=displayout(DOX%,DOY%,2)+material(closest%,2)*ambientG*ambientBRIGHT
