@@ -377,7 +377,7 @@
   
         for DOY%=1 to 108*RES% :rem loop pixel y coordinates
           for DOX%=1 to 192*RES% :rem loop pixel x coordinates
-            for RTRACE%=1 to Atop% rem loop to test ray against each triangle where RTRACE% is the triangle's array index
+            for RTRACE%=1 to Atop% :rem loop to test ray against each triangle where RTRACE% is the triangle's array index
         
               rem transfer triangle data from array into new variables for ease of simple lines (may change this at some point to optimise): in the form of points A, B and C each with an x,y,z coordinate
         
